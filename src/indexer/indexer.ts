@@ -4,6 +4,7 @@ import { config } from '../config';
 import { fetchEvents, getLatestLedger, getRpcWebsocketUrl, getTransaction } from './rpc';
 import { decodeTransaction } from './decoder';
 import { ingestEvents } from './eventIngestor';
+import { enqueueFailure } from './errorQueue';
 
 const BATCH = config.indexerBatchSize;
 

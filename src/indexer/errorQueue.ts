@@ -1,4 +1,5 @@
 import { prisma } from '../db';
+import { Prisma } from '@prisma/client';
 
 const MAX_RETRIES = 3;
 
@@ -39,7 +40,7 @@ export async function enqueueFailure(item: FailedItemInput): Promise<void> {
         rawXdr: item.rawXdr ?? null,
         errorMsg: err.message,
         errorStack: err.stack ?? null,
-        context: item.context ?? null,
+        context: item.context != null ? (item.context as Prisma.InputJsonValue) : Prisma.JsonNull,
         retryCount: 0,
         dead: false,
       },
