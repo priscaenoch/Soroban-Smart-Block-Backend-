@@ -53,6 +53,25 @@ interface ParamDiagnostic {
   issue: string;
 }
 
+const XDR_TYPE_MAP: Record<string, string[]> = {
+  address: ['scvAddress'], bool: ['scvBool'],
+  i128: ['scvI128'], u128: ['scvU128'],
+  i64: ['scvI64'],   u64: ['scvU64'],
+  i32: ['scvI32'],   u32: ['scvU32'],
+  string: ['scvString'], symbol: ['scvSymbol'],
+  bytes: ['scvBytes'],   void: ['scvVoid'],
+};
+
+function detectTypeMismatch(abiType: string, xdrType: string, value: unknown): string | null {
+  const allowed = XDR_TYPE_MAP[abiType.toLowerCase()];
+  if (!allowed) return null;
+  if (!allowed.includes(xdrType))
+    return `Type mismatch: expected ${abiType} (${allowed.join('|')}) but got ${xdrType}`;
+  if (['u32','u64','u128'].includes(abiType) && typeof value === 'bigint' && value < 0n)
+    return `Value ${value} is negative but ${abiType} must be ≥ 0`;
+  return null;
+}
+
 /**
  * Validate decoded XDR args against the ABI and return per-param diagnostics
  * for any type mismatches or missing arguments.
@@ -61,6 +80,7 @@ function diagnoseArgs(
   fnName: string,
   rawArgs: xdr.ScVal[],
   abi: Awaited<ReturnType<typeof getContractAbi>>,
+  decimals?: number,
   decimals?: number
 ): ParamDiagnostic[] {
   if (!abi) return [];
