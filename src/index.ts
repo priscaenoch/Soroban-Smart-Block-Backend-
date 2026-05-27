@@ -3,12 +3,11 @@ import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import { router } from './api/router';
 import { prisma } from './db';
 import { startIndexerService } from './indexer/indexer';
-import { attachWebSocketServer } from './ws/eventBroadcaster';
+import { tieredRateLimit } from './middleware/rateLimit';
 
 const app = express();
 
@@ -16,12 +15,7 @@ app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
-app.use(rateLimit({
-  windowMs: config.rateLimitWindowMs,
-  max: config.rateLimitMax,
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
+app.use(tieredRateLimit);
 
 app.use('/api/v1', router);
 
