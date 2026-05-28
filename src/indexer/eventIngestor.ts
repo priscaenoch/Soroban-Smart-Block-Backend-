@@ -5,6 +5,7 @@ import { fetchEvents, LedgerEvent } from './rpc';
 import { broadcastEvent } from '../ws/eventBroadcaster';
 import { broadcastSSEEvent } from '../api/sse';
 import { barrierUpsertContract, barrierUpsertEvent } from './writeBarrier';
+import { getWhaleWatcher } from './whaleWatcher';
 
 /**
  * Parse DiagnosticEvents from a raw TransactionMeta XDR (base64).
@@ -101,7 +102,7 @@ async function storeEvent(event: LedgerEvent): Promise<number> {
   // Ensure the transaction row exists (Event has a required FK to Transaction)
   const txExists = await prisma.transaction.findUnique({
     where: { hash: event.transactionHash },
-    select: { hash: true },
+    select: { hash: true, sourceAccount: true },
   });
   if (!txExists) return 0; // transaction not yet indexed; skip
 
@@ -127,7 +128,19 @@ async function storeEvent(event: LedgerEvent): Promise<number> {
     },
   });
 
-  const broadcastPayload = {
+  // #136: Monitor for whale transactions
+  const whaleWatcher = getWhaleWatcher();
+  await whaleWatcher.monitorEvent({
+    transactionHash: event.transactionHash,
+    contractAddress: event.contractId,
+    eventType,
+    decoded,
+    sourceAccount: txExists.sourceAccount,
+    ledgerSequence: event.ledgerSequence,
+    ledgerCloseTime: event.ledgerCloseTime,
+  });
+
+  broadcastEvent({
     id,
     contractAddress: event.contractId,
     eventType,
