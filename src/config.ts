@@ -33,6 +33,10 @@ export const config = {
   indexerBatchSize:      parseInt(process.env.INDEXER_BATCH_SIZE       ?? '100'),
   indexerCatchupWorkers: Math.max(1, parseInt(process.env.INDEXER_CATCHUP_WORKERS ?? '4')),
 
+  // ── Micro-block sync (2.5 s block close times) ────────────────────────────
+  microBlockSyncEnabled:    (process.env.MICRO_BLOCK_SYNC_ENABLED ?? 'true') !== 'false',
+  microBlockPollIntervalMs: parseInt(process.env.MICRO_BLOCK_POLL_INTERVAL_MS ?? '2500'),
+
   // ── Rate limiting ─────────────────────────────────────────────────────────
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? '60000'),
   rateLimitMax:      parseInt(process.env.RATE_LIMIT_MAX        ?? '100'),
