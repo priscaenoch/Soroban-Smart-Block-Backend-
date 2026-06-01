@@ -117,7 +117,8 @@ export async function getLedger(ledgerSequence: number): Promise<unknown> {
   const cached = await cacheGet<unknown>(cacheKey);
   if (cached !== null) return cached;
 
-  const ledger = await retry(() => rpc.getLedger(ledgerSequence));
+  const rpcClient = rpc as any;
+  const ledger = await retry(() => rpcClient.getLedger(ledgerSequence));
   const ttl = ledgerSequence === 0 ? null : 60 * 60 * 24;
   await cacheSet(cacheKey, ledger, ttl);
   return ledger;

@@ -39,7 +39,7 @@ export function parseRestoreFootprint(envelopeXdr: string): RestoredKey[] | null
   );
   if (!restoreOp) return null;
 
-  const footprint = restoreOp.body().restoreFootprintOp().footprint();
+  const footprint = (restoreOp.body().restoreFootprintOp() as any).footprint();
   const keys: RestoredKey[] = [];
 
   for (const lk of [...footprint.readOnly(), ...footprint.readWrite()]) {

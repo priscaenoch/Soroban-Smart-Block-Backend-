@@ -11,7 +11,7 @@ factoryTrackerRouter.get('/:parentAddress/tree', async (req: Request, res: Respo
     res.json({
       parentFactory: tree.parent,
       childCount: tree.childCount,
-      children: tree.children.map((c) => ({
+      children: tree.children.map((c: any) => ({
         childAddress: c.childContractAddress,
         createdAt: c.creationTimestamp,
         creationTxHash: c.creationTransactionHash,
@@ -31,7 +31,7 @@ factoryTrackerRouter.get('/:factoryAddress/instances', async (req: Request, res:
     res.json({
       factoryAddress: req.params.factoryAddress,
       activeInstances: instances.length,
-      instances: instances.map((i) => ({
+      instances: instances.map((i: any) => ({
         address: i.childContractAddress,
         createdAt: i.creationTimestamp,
         creationLedger: i.creationLedgerSequence,

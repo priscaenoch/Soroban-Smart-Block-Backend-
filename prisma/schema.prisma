@@ -185,6 +185,134 @@ model ZkpVerificationEvent {
   @@index([contractAddress, ledgerSequence])
 }
 
+model SessionAuthorization {
+  id                String   @id @default(cuid())
+  eventId           String   @unique
+  contractAddress   String
+  hotSigner         String?
+  authorizationType String
+  startLedger       Int
+  expiryLedger      Int
+  allocatedBlocks   Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([contractAddress])
+  @@index([expiryLedger])
+}
+
+model OracleCallback {
+  id                        String   @id @default(cuid())
+  requestTransactionHash    String   @unique
+  fulfillmentTransactionHash String?
+  requestLedgerSequence     Int
+  fulfillmentLedgerSequence  Int?
+  requestTimestamp          DateTime
+  fulfillmentTimestamp      DateTime?
+  oracleContractAddress     String
+  dataRequestorAddress      String
+  roundTripLatencyBlocks    Int?
+  roundTripLatencyMs        Int?
+  status                    String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([oracleContractAddress])
+  @@index([requestLedgerSequence])
+}
+
+model RwaComplianceEvent {
+  id                   String   @id @default(cuid())
+  transactionHash      String   @unique
+  ledgerSequence       Int
+  ledgerCloseTime      DateTime
+  assetContractAddress String
+  issuerAddress        String
+  targetAddress        String
+  amount               String?
+  complianceReason     String
+  humanStatement       String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([assetContractAddress])
+  @@index([issuerAddress])
+  @@index([targetAddress])
+}
+
+model StateContention {
+  id              String   @id
+  ledgerSequence  Int
+  contractAddress String
+  stateKey        String
+  txHashes        String[]
+  conflictCount   Int
+  delayMs         Float
+  delayLabel      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ledgerSequence])
+  @@index([contractAddress])
+}
+
+model ContractFactory {
+  id                      String   @id @default(cuid())
+  parentContractAddress   String
+  childContractAddress    String
+  creationTransactionHash String
+  creationLedgerSequence  Int
+  creationTimestamp       DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([parentContractAddress, childContractAddress])
+  @@index([parentContractAddress])
+  @@index([childContractAddress])
+  @@index([creationLedgerSequence])
+}
+
+model ApiKey {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+}
+
+model ContractResourceMetric {
+  id               String   @id @default(cuid())
+  contractAddress  String
+  transactionHash  String
+  ledgerSequence   Int
+  ledgerCloseTime  DateTime
+  memoryUsageBytes Int
+  cpuInstructions  Int
+  storageFootprint Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([contractAddress, transactionHash])
+  @@index([contractAddress])
+  @@index([ledgerSequence])
+}
+
+model SignatureInspection {
+  id               String   @id @default(cuid())
+  transactionHash  String   @unique
+  ledgerSequence   Int
+  curveType        String
+  isPasskey        Boolean
+  pubKeyX          String?
+  pubKeyY          String?
+  label            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([transactionHash])
+  @@index([ledgerSequence])
+}
+
 model IndexerState {
   id         String   @id @default("singleton")
   lastLedger Int      @default(0)

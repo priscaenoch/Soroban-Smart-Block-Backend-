@@ -40,8 +40,8 @@ export async function fulfillOracleCallback(
 
   if (!callback) return;
 
-  const roundTripBlocks = fulfillmentLedger - callback.requestLedgerSequence;
-  const roundTripMs = fulfillmentTime.getTime() - callback.requestTimestamp.getTime();
+  const roundTripLatencyBlocks = fulfillmentLedger - callback.requestLedgerSequence;
+  const roundTripLatencyMs = fulfillmentTime.getTime() - callback.requestTimestamp.getTime();
 
   await prisma.oracleCallback.update({
     where: { requestTransactionHash: requestTxHash },

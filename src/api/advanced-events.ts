@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { prismaRead as prisma } from '../db';
-import { getWasmVersionLineage } from './wasm-upgrade-collector';
-import { getShieldedTransferHistory } from './shielded-transfer-handler';
-import { getZkpVerificationHistory } from './zkp-verifier';
+import { getWasmVersionLineage } from '../indexer/wasm-upgrade-collector';
+import { getShieldedTransferHistory } from '../indexer/shielded-transfer-handler';
+import { getZkpVerificationHistory } from '../indexer/zkp-verifier';
 
 const router = Router();
 

@@ -125,7 +125,7 @@ virtualListRouter.get('/transactions', async (req: Request, res: Response) => {
         status: true,
         ledgerSequence: true,
         ledgerCloseTime: true,
-        decodedDescription: true,
+        humanReadable: true,
       },
       orderBy: { ledgerCloseTime: 'desc' },
       skip: offset,

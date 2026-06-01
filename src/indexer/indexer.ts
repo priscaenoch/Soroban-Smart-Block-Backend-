@@ -3,7 +3,6 @@ import { prismaWrite as prisma } from '../db';
 import { config } from '../config';
 import { fetchEvents, getLatestLedger, getRpcWebsocketUrl, getTransaction, type LedgerEvent } from './rpc';
 import { decodeTransaction, decodeEvent } from './decoder';
-import { processLedgerRange } from './ledgerProcessor';
 
 const BATCH = config.indexerBatchSize;
 const WORKERS = config.indexerCatchupWorkers;
@@ -58,7 +57,7 @@ async function processLedgerRange(start: number, end: number) {
         update: {},
         create: {
           hash: event.transactionHash,
-          ledger: event.ledger,
+          ledgerSequence: event.ledgerSequence,
           ledgerCloseTime: event.ledgerCloseTime,
           sourceAccount: (txResult as any)?.sourceAccount ?? 'unknown',
           contractAddress: decoded.contractAddress,
@@ -85,7 +84,7 @@ async function processLedgerRange(start: number, end: number) {
         topics: event.topics,
         data: { raw: event.data },
         decoded: decoded as object,
-        ledger: event.ledger,
+        ledgerSequence: event.ledgerSequence,
         ledgerCloseTime: event.ledgerCloseTime,
       },
     });
@@ -146,7 +145,7 @@ async function processSessionAuthorization(
   }
 
   const hotSigner = extractHotSigner(decoded, event.topics);
-  const startLedger = extractStartLedger(decoded, event.ledger);
+  const startLedger = extractStartLedger(decoded, event.ledgerSequence);
   const expiryLedger = extractExpiryLedger(decoded, startLedger);
   if (!hotSigner || expiryLedger === undefined || expiryLedger <= startLedger) {
     return;

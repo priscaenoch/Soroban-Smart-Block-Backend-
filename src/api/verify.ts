@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import * as path from 'path';
@@ -12,7 +13,7 @@ export const verifyRouter = Router();
 const upload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req, file, cb: any) => {
     const allowed = ['.tar.gz', '.tgz', '.zip'];
     const ok = allowed.some(ext => file.originalname.endsWith(ext));
     cb(ok ? null : new Error('Only .tar.gz / .zip archives are accepted'), ok);
@@ -93,7 +94,10 @@ async function runVerification(
     // Capture source files before compilation (they get cleaned up after)
     const sourceFiles = await extractSourceFiles(extractedDir).catch(() => []);
     if (sourceFiles.length > 0) {
-      await prisma.verificationJob.update({ where: { id: jobId }, data: { sourceFiles } });
+      await prisma.verificationJob.update({
+        where: { id: jobId },
+        data: { sourceFiles: sourceFiles as unknown as Prisma.InputJsonValue },
+      });
     }
 
     const { wasmHash, logs } = await compileSandboxed(extractedDir, toolchain);
