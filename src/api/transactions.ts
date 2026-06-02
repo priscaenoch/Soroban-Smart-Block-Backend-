@@ -21,8 +21,8 @@ const TX_SELECT = {
 };
 
 const listSchema = z.object({
-  // cursor-based (preferred for large datasets)
-  cursor: z.string().optional(),          // opaque cursor = last tx `id` (cuid)
+  // cursor-based (preferred for large datasets) — cursor = ledger number
+  cursor: z.coerce.number().int().min(0).optional(),
   // offset-based fallback
   page:   z.coerce.number().min(1).default(1),
   limit:  z.coerce.number().min(1).max(100).default(20),
@@ -35,13 +35,13 @@ const listSchema = z.object({
 });
 
 // GET /transactions
-// Cursor mode:  ?cursor=<id>&limit=20&contract=...&ledgerMin=100&ledgerMax=200
+// Cursor mode:  ?cursor=<ledger>&limit=20&contract=...
 // Offset mode:  ?page=2&limit=20&contract=...
 transactionRouter.get('/', async (req: Request, res: Response) => {
   try {
     const q = listSchema.parse(req.query);
 
-    const where = {
+    const where: any = {
       ...(q.contract  && { contractAddress: q.contract }),
       ...(q.account   && { sourceAccount: q.account }),
       ...(q.status    && { status: q.status }),
@@ -53,32 +53,22 @@ transactionRouter.get('/', async (req: Request, res: Response) => {
       }),
     };
 
-    if (q.cursor) {
-      // Cursor-based: fetch limit+1 to determine if there's a next page
+    if (q.cursor !== undefined) {
+      // Cursor-based: return rows with ledger < cursor (descending)
+      where.ledgerSequence = { ...where.ledgerSequence, lt: q.cursor };
+
       const rows = await prisma.transaction.findMany({
         where,
         orderBy: [{ ledgerSequence: 'desc' }, { id: 'desc' }],
-        cursor: { id: q.cursor },
-        skip: 1,           // skip the cursor row itself
         take: q.limit + 1,
         select: TX_SELECT,
       });
 
       const hasNext = rows.length > q.limit;
       const data = hasNext ? rows.slice(0, q.limit) : rows;
-      const nextCursor = hasNext ? (data[data.length - 1] as any).id : null;
+      const nextCursor = hasNext ? (data[data.length - 1] as any).ledgerSequence : null;
 
-      // TX_SELECT omits `id`; re-fetch last id for cursor only when needed
-      const nextCursorId = hasNext
-        ? await prisma.transaction
-            .findFirst({
-              where: { hash: (data[data.length - 1] as any).hash },
-              select: { id: true },
-            })
-            .then((r) => r?.id ?? null)
-        : null;
-
-      return res.json({ data, nextCursor: nextCursorId, hasNext });
+      return res.json({ data, nextCursor, hasNext });
     }
 
     // Offset-based fallback
