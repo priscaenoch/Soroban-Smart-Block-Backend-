@@ -120,7 +120,8 @@ export async function fetchHorizonOperations(address: string, limit = 50, cursor
   }>(`/accounts/${encodeURIComponent(address)}/operations`, params);
 
   const records = data?._embedded?.records ?? [];
-  const nextCursor = records.length > 0 ? records[records.length - 1].paging_token ?? null : null;
+  const lastRecord = records[records.length - 1] as { paging_token?: string } | undefined;
+  const nextCursor = records.length > 0 ? (lastRecord?.paging_token ?? null) : null;
   return { records, nextCursor };
 }
 
