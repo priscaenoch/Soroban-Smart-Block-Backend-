@@ -24,6 +24,7 @@ import { startGasAnalyticsScheduler } from './indexer/gasAnalytics';
 import { startPortfolioScanner } from './indexer/portfolioScanner';
 import { startVolumeAlertScheduler } from './indexer/volumeAlertRunner';
 import { startSystemicMonitor } from './indexer/systemicMonitor';
+import { startNetworkIndexer } from './indexer/network-indexer';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './logger';
 
@@ -77,6 +78,9 @@ async function main() {
     startPortfolioScanner();
     startVolumeAlertScheduler();
     startSystemicMonitor();
+    startNetworkIndexer().catch((err) =>
+      logger.error('Network indexer failed', { error: String(err) }),
+    );
   }
 
   const httpServer = createServer(app);

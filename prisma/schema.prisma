@@ -1301,3 +1301,139 @@ model FreezeViolation {
 
   @@index([transactionHash])
 }
+
+// ── Soroban Network Observatory ──────────────────────────────────────────────
+
+enum NodeType {
+  validator
+  full_node
+  watcher
+  archival
+  unknown
+}
+
+enum AlertSeverity {
+  critical
+  warning
+  info
+}
+
+model NetworkNode {
+  id              String   @id @default(cuid())
+  publicKey       String   @unique
+  name            String?
+  organization    String?
+  homeDomain      String?
+  version         String?
+  ledgerVersion   Int?
+  overlayVersion  Int?
+  maxLedgerAge    Int?
+  quorumSet       Json?
+  isValidator     Boolean  @default(false)
+  activeInNetwork Boolean  @default(true)
+  firstSeen       DateTime
+  lastSeen        DateTime
+  uptime24h       Float?
+  uptime7d        Float?
+  uptime30d       Float?
+  avgLatency      Int?
+  p95Latency      Int?
+  agreementRate24h Float?
+  agreementRate7d  Float?
+  agreementRate30d Float?
+  missedSlots24h   Int?
+  missedSlots7d    Int?
+  country         String?
+  city            String?
+  latitude        Float?
+  longitude       Float?
+  organizationUrl String?
+  softwareVersion String?
+  stellarCoreVersion String?
+  historyArchiveUrl String?
+  peerCount       Int?
+  transitiveQuorum Json?
+  nodeType        NodeType @default(unknown)
+  lastHeartbeat   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  nodeEvents      NetworkNodeEvent[]
+  nodeMetrics     NetworkNodeMetric[]
+
+  @@index([publicKey])
+  @@index([isValidator])
+  @@index([activeInNetwork])
+  @@index([lastSeen])
+}
+
+model NetworkNodeEvent {
+  id        String   @id @default(cuid())
+  nodeId    String
+  node      NetworkNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  eventType String
+  details   Json?
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([nodeId])
+  @@index([eventType])
+  @@index([timestamp])
+}
+
+model NetworkNodeMetric {
+  id            String   @id @default(cuid())
+  nodeId        String
+  node          NetworkNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  timestamp     DateTime @default(now())
+  ledgerNum     Int?
+  latency       Int?
+  agreementRate Float?
+  peerCount     Int?
+  createdAt     DateTime @default(now())
+
+  @@index([nodeId, timestamp])
+  @@index([timestamp])
+}
+
+model NetworkConsensusRound {
+  id             String   @id @default(cuid())
+  ledgerSeq      Int      @unique
+  startTime      DateTime
+  endTime        DateTime
+  durationMs     Int
+  externalizeTimeMs Int?
+  txCount        Int
+  successful     Boolean  @default(true)
+  agreementRate  Float?
+  nodesParticipated Int
+  quorumSetSize  Int
+  missedNodes    Json?
+  topologyHash   String?
+  createdAt      DateTime @default(now())
+
+  @@index([ledgerSeq])
+  @@index([startTime])
+  @@index([successful])
+}
+
+model NetworkAlert {
+  id             String   @id @default(cuid())
+  alertType      String
+  severity       AlertSeverity
+  title          String
+  description    String
+  affectedNodes  Json?
+  metricData     Json?
+  acknowledged   Boolean  @default(false)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([alertType])
+  @@index([severity])
+  @@index([acknowledged])
+  @@index([createdAt])
+}
