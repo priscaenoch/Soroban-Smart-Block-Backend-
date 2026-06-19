@@ -1,10 +1,9 @@
 import WebSocket from 'ws';
 import { prismaWrite as prisma } from '../db';
 import { config } from '../config';
-import { fetchEvents, getLatestLedger, getRpcWebsocketUrl, getTransaction, type LedgerEvent } from './rpc';
+import { fetchEvents, getLatestLedger, getRpcWebsocketUrl, getTransaction, getTransactionFromHorizon, type LedgerEvent } from './rpc';
 import { decodeTransaction, decodeEvent } from './decoder';
-import { getLatestLedger, getRpcWebsocketUrl } from './rpc';
-import { processLedgerRange } from './ledgerProcessor';
+import { feedOrchestrator } from '../feed/orchestrator';
 
 const BATCH = config.indexerBatchSize;
 const WORKERS = config.indexerCatchupWorkers;
@@ -23,7 +22,11 @@ async function getLastIndexedLedger(): Promise<number> {
 }
 
 async function setLastIndexedLedger(ledger: number): Promise<void> {
-  await prisma.indexerState.update({ where: { id: 'singleton' }, data: { lastLedger: ledger } });
+  await prisma.indexerState.upsert({
+    where: { id: 'singleton' },
+    update: { lastLedger: ledger },
+    create: { id: 'singleton', lastLedger: ledger },
+  });
 }
 
 async function processLedgerRange(start: number, end: number) {
@@ -39,7 +42,8 @@ async function processLedgerRange(start: number, end: number) {
 
     const existingTx = await prisma.transaction.findUnique({ where: { hash: event.transactionHash } });
     if (!existingTx) {
-      const txResult = await getTransaction(event.transactionHash).catch(() => null);
+      const txResult = await getTransaction(event.transactionHash)
+        .catch(() => getTransactionFromHorizon(event.transactionHash).catch(() => null));
       const rawXdr = (txResult as any)?.envelopeXdr?.toXDR('base64') ?? '';
       const decoded = rawXdr
         ? await decodeTransaction(rawXdr)
@@ -50,12 +54,12 @@ async function processLedgerRange(start: number, end: number) {
             humanReadable: null,
           };
 
-      await prisma.transaction.upsert({
+      const transaction = await prisma.transaction.upsert({
         where: { hash: event.transactionHash },
         update: {},
         create: {
           hash: event.transactionHash,
-          ledger: event.ledger,
+          ledgerSequence: event.ledgerSequence,
           ledgerCloseTime: event.ledgerCloseTime,
           sourceAccount: (txResult as any)?.sourceAccount ?? 'unknown',
           contractAddress: decoded.contractAddress,
@@ -67,11 +71,14 @@ async function processLedgerRange(start: number, end: number) {
           feeCharged: String((txResult as any)?.feeCharged ?? ''),
         },
       });
+
+      // Publish to feed
+      await feedOrchestrator.publishTransaction(transaction).catch(console.error);
     }
 
     const { eventType, decoded } = decodeEvent(event.topics, event.data);
     const eventId = `${event.transactionHash}-${event.topics[0] ?? '0'}`;
-    await prisma.event.upsert({
+    const savedEvent = await prisma.event.upsert({
       where: { id: eventId },
       update: {},
       create: {
@@ -82,13 +89,18 @@ async function processLedgerRange(start: number, end: number) {
         topics: event.topics,
         data: { raw: event.data },
         decoded: decoded as object,
-        ledger: event.ledger,
+        ledgerSequence: event.ledgerSequence,
         ledgerCloseTime: event.ledgerCloseTime,
       },
     });
 
+    // Publish event to feed
+    await feedOrchestrator.publishEvent(savedEvent).catch(console.error);
+
     await processSessionAuthorization(event, eventType, decoded, eventId);
   }
+}
+
 // ---------------------------------------------------------------------------
 // Parallel catch-up
 // ---------------------------------------------------------------------------
@@ -141,7 +153,7 @@ async function processSessionAuthorization(
   }
 
   const hotSigner = extractHotSigner(decoded, event.topics);
-  const startLedger = extractStartLedger(decoded, event.ledger);
+  const startLedger = extractStartLedger(decoded, event.ledgerSequence);
   const expiryLedger = extractExpiryLedger(decoded, startLedger);
   if (!hotSigner || expiryLedger === undefined || expiryLedger <= startLedger) {
     return;
@@ -271,6 +283,7 @@ export async function startIndexerService() {
 
 class SorobanEventWorker {
   private websocket?: WebSocket;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
   private reconnectDelayMs = 1000;
   private isProcessing = false;
   private shouldStop = false;
@@ -281,28 +294,41 @@ class SorobanEventWorker {
 
     while (!this.shouldStop) {
       try {
-        const latest = await getLatestLedger();
-        const last = await getLastIndexedLedger();
-        const gap = latest - last;
-
-        if (gap <= 0) {
+        if (this.isProcessing) {
           await sleep(config.indexerPollIntervalMs);
           continue;
         }
 
-        if (gap > BATCH && WORKERS > 1) {
-          // Large gap — use parallel catch-up workers
-          await catchUp(last + 1, latest);
-        } else {
-          // Small gap (≤ one batch) or single-worker mode — process inline
-          const end = Math.min(last + BATCH, latest);
-          await processLedgerRange(last + 1, end);
-          await setLastIndexedLedger(end);
-        }
+        const latest = await getLatestLedger();
+        await this.syncToLatest(latest);
       } catch (err) {
         console.error('Indexer error:', err);
         await sleep(config.indexerPollIntervalMs);
       }
+    }
+  }
+
+  private async syncToLatest(targetLedger: number) {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const last = await getLastIndexedLedger();
+        if (last >= targetLedger) return;
+
+        const gap = targetLedger - last;
+        if (gap > BATCH && WORKERS > 1) {
+          await catchUp(last + 1, targetLedger);
+          return;
+        }
+
+        const end = Math.min(last + BATCH, targetLedger);
+        await processLedgerRange(last + 1, end);
+        await setLastIndexedLedger(end);
+      }
+    } finally {
+      this.isProcessing = false;
     }
   }
 
@@ -311,6 +337,11 @@ class SorobanEventWorker {
   // -------------------------------------------------------------------------
 
   private connectWebsocket() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
     const url = getRpcWebsocketUrl();
     console.log(`Connecting Soroban RPC websocket to ${url}`);
     try {
@@ -371,17 +402,8 @@ class SorobanEventWorker {
 
   private async onLedgerClose(ledger: number) {
     if (this.isProcessing) return;
-    this.isProcessing = true;
-    try {
-      const last = await getLastIndexedLedger();
-      if (ledger <= last) return;
-      console.log(`Ledger close event received for ledger ${ledger}`);
-      const end = Math.min(last + BATCH, ledger);
-      await processLedgerRange(last + 1, end);
-      await setLastIndexedLedger(end);
-    } finally {
-      this.isProcessing = false;
-    }
+    console.log(`Ledger close event received for ledger ${ledger}`);
+    await this.syncToLatest(ledger);
   }
 
   private handleWsClose(code: number, reason: string) {
@@ -396,7 +418,13 @@ class SorobanEventWorker {
 
   private scheduleReconnect() {
     if (this.shouldStop) return;
-    setTimeout(() => this.connectWebsocket(), this.reconnectDelayMs);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.connectWebsocket();
+      this.reconnectTimer = undefined;
+    }, this.reconnectDelayMs);
     this.reconnectDelayMs = Math.min(30000, this.reconnectDelayMs * 2);
   }
 
