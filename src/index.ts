@@ -27,8 +27,16 @@ import { startSystemicMonitor } from './indexer/systemicMonitor';
 import { startNetworkIndexer } from './indexer/network-indexer';
 import { startEmergencyIndexer } from './indexer/emergency-indexer';
 import { startHealthScoreScheduler } from './indexer/health-scorer';
+import { startPrivacyDetector } from './indexer/privacy-background-detector';
+import { startComposabilityIndexer } from './indexer/composability-indexer';
+import { attachPrivacyWebSocket } from './ws/privacyBroadcaster';
+import { attachComposabilityWebSocket } from './ws/composabilityBroadcaster';
+import { attachArbitrageWebSocket } from './ws/arbitrageBroadcaster';
+import { startArbitrageScanner } from './indexer/arbitrage-scanner';
+import { startPoolPriceMonitor } from './indexer/pool-price-monitor';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './logger';
+import { feedOrchestrator } from './feed/orchestrator';
 
 const app = express();
 
@@ -89,10 +97,39 @@ async function main() {
     startHealthScoreScheduler().catch((err) =>
       logger.warn('Health score scheduler failed to start', { error: String(err) }),
     );
+    try {
+      startPrivacyDetector();
+    } catch (err) {
+      logger.warn('Privacy detector failed to start', { error: String(err) });
+    }
+    try {
+      startComposabilityIndexer();
+    } catch (err) {
+      logger.warn('Composability indexer failed to start', { error: String(err) });
+    }
   }
 
   const httpServer = createServer(app);
   attachWebSocketServer(httpServer);
+  attachPrivacyWebSocket(httpServer);
+  attachComposabilityWebSocket(httpServer);
+  attachArbitrageWebSocket(httpServer);
+
+  if (!process.env.DISABLE_INDEXER) {
+    try {
+      startPoolPriceMonitor();
+    } catch (err) {
+      logger.warn('Pool price monitor failed to start', { error: String(err) });
+    }
+    try {
+      startArbitrageScanner();
+    } catch (err) {
+      logger.warn('Arbitrage scanner failed to start', { error: String(err) });
+    }
+  }
+
+  // Initialize Feed Orchestrator with WebSocket support
+  await feedOrchestrator.initialize(httpServer);
 
   httpServer.listen(config.port, () => {
     logger.info('Soroban Explorer API started', { port: config.port });
