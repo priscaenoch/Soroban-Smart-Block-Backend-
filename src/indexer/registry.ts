@@ -1,6 +1,6 @@
 import { xdr } from '@stellar/stellar-sdk';
 import { prismaRead as prisma } from '../db';
-import { decodeTypedArgs, formatAmount } from './args-decoder';
+import { decodeTypedArgs } from './args-decoder';
 import { renderTemplate } from './template-engine';
 import { getSep41Abi } from './sep41-parser';
 

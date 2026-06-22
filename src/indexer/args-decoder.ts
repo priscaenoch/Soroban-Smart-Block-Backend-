@@ -1,10 +1,5 @@
 import { xdr, scValToNative, Address } from '@stellar/stellar-sdk';
 import type { AbiParam } from './registry';
-import {
-  isCheckedArithmeticFunction,
-  analyzeCheckedArithmetic,
-  checkedArithmeticToDecodedArg,
-} from './checked-arithmetic-decoder';
 
 export interface DecodedArg {
   raw: unknown; // native JS value (BigInt, string, object, …)

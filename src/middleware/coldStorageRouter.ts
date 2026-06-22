@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { config } from '../config';
 
 const RECENT_LEDGER_DAYS = parseInt(process.env.RECENT_LEDGER_DAYS ?? '30');
 const RECENT_LEDGER_THRESHOLD = Math.floor(

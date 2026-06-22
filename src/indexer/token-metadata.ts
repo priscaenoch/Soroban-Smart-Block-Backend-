@@ -17,7 +17,7 @@
  */
 
 import axios from 'axios';
-import { SorobanRpc, xdr, scValToNative, Address, nativeToScVal } from '@stellar/stellar-sdk';
+import { SorobanRpc, xdr, scValToNative, Address } from '@stellar/stellar-sdk';
 import { prismaRead } from '../db';
 import { config } from '../config';
 import { formatAmount } from './args-decoder';

@@ -1,12 +1,16 @@
 /**
- * GET /api/v1/analytics/gas        — pre-aggregated gas cost snapshots
- * POST /api/v1/analytics/gas/run   — trigger an on-demand analytics run
+ * GET  /api/v1/analytics/gas                            — pre-aggregated gas cost snapshots
+ * POST /api/v1/analytics/gas/run                        — trigger an on-demand analytics run
+ * GET  /api/v1/analytics/protocol-economics             — protocol fee/burn/revenue snapshots (#301)
+ * GET  /api/v1/analytics/protocol-economics/summary     — cross-bucket totals (#301)
+ * POST /api/v1/analytics/protocol-economics/run         — on-demand recompute (#301)
  */
 
 import { Router, Request, Response } from 'express';
 import { prismaRead as prisma } from '../db';
 import { runGasAnalytics } from '../indexer/gasAnalytics';
 import { z } from 'zod';
+import { protocolEconomicsRouter } from './protocol-economics';
 
 export const analyticsRouter = Router();
 
@@ -41,3 +45,6 @@ analyticsRouter.post('/gas/run', async (_req: Request, res: Response) => {
     res.status(500).json({ error: String(e) });
   }
 });
+
+// ── Protocol Economic Dashboard (#301) ────────────────────────────────────────
+analyticsRouter.use('/protocol-economics', protocolEconomicsRouter);

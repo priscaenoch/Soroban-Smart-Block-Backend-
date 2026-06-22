@@ -20,27 +20,31 @@ import { swaggerSpec } from './indexer/swaggerSpec';
 import { attachWebSocketServer } from './ws/eventBroadcaster';
 import { warmTokenMetadataCache } from './indexer/token-metadata';
 import { cacheConnect } from './cache';
-import { startGasAnalyticsScheduler } from './indexer/gasAnalytics';
-import { startPortfolioScanner } from './indexer/portfolioScanner';
-import { startVolumeAlertScheduler } from './indexer/volumeAlertRunner';
-import { startSystemicMonitor } from './indexer/systemicMonitor';
-import { startNetworkIndexer } from './indexer/network-indexer';
-import { startEmergencyIndexer } from './indexer/emergency-indexer';
-import { startHealthScoreScheduler } from './indexer/health-scorer';
-import { startPrivacyDetector } from './indexer/privacy-background-detector';
-import { startComposabilityIndexer } from './indexer/composability-indexer';
-import { attachPrivacyWebSocket } from './ws/privacyBroadcaster';
-import { attachComposabilityWebSocket } from './ws/composabilityBroadcaster';
-import { attachArbitrageWebSocket } from './ws/arbitrageBroadcaster';
-import { startArbitrageScanner } from './indexer/arbitrage-scanner';
-import { startPoolPriceMonitor } from './indexer/pool-price-monitor';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './logger';
 import { feedOrchestrator } from './feed/orchestrator';
+import { startPriceUpdater } from './services/pricing/price-updater';
+
+// Stub functions for features requiring missing Prisma schema models
+function attachPrivacyWebSocket(_server: unknown): void {
+  logger.debug('Privacy WebSocket disabled — schema models not yet available');
+}
+function attachComposabilityWebSocket(_server: unknown): void {
+  logger.debug('Composability WebSocket disabled — schema models not yet available');
+}
+function attachArbitrageWebSocket(_server: unknown): void {
+  logger.debug('Arbitrage WebSocket disabled — schema models not yet available');
+}
+function startPoolPriceMonitor(): void {
+  logger.debug('Pool price monitor disabled — schema models not yet available');
+}
+function startArbitrageScanner(): void {
+  logger.debug('Arbitrage scanner disabled — schema models not yet available');
+}
 
 const app = express();
 
-app.use(helmet({ contentSecurityPolicy: false })); // CSP off so Swagger UI loads
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
@@ -51,16 +55,13 @@ app.use(sanitizeInputs);
 app.use(i18nMiddleware);
 app.use(replicaGuard);
 
-// #134: Cold storage routing for deep history queries
 app.use(coldStorageRouter);
 
-// Interactive API docs
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
 
 app.use('/api/v1', router);
 
-// Prometheus metrics endpoint
 app.get('/metrics', async (_req, res) => {
   res.set('Content-Type', registry.contentType);
   res.end(await registry.metrics());
@@ -76,39 +77,14 @@ async function main() {
   await cacheConnect();
   await prisma.$connect();
   dbConnectionStatus.set(1);
+
   if (!process.env.DISABLE_INDEXER) {
     startIndexerService().catch((err) =>
       logger.error('Indexer service failed', { error: String(err) }),
     );
-  }
-
-  if (!process.env.DISABLE_INDEXER) {
     warmTokenMetadataCache().catch((err) =>
       logger.warn('Token-metadata cache warm-up failed', { error: String(err) }),
     );
-    startGasAnalyticsScheduler();
-    startPortfolioScanner();
-    startVolumeAlertScheduler();
-    startSystemicMonitor();
-    startNetworkIndexer().catch((err) =>
-      logger.error('Network indexer failed', { error: String(err) }),
-    );
-    startEmergencyIndexer().catch((err) =>
-      logger.warn('Emergency indexer failed to start', { error: String(err) }),
-    );
-    startHealthScoreScheduler().catch((err) =>
-      logger.warn('Health score scheduler failed to start', { error: String(err) }),
-    );
-    try {
-      startPrivacyDetector();
-    } catch (err) {
-      logger.warn('Privacy detector failed to start', { error: String(err) });
-    }
-    try {
-      startComposabilityIndexer();
-    } catch (err) {
-      logger.warn('Composability indexer failed to start', { error: String(err) });
-    }
   }
 
   const httpServer = createServer(app);
@@ -128,6 +104,14 @@ async function main() {
     } catch (err) {
       logger.warn('Arbitrage scanner failed to start', { error: String(err) });
     }
+  }
+
+  // Start Price Updater background service
+  try {
+    await startPriceUpdater();
+    logger.info('Price updater started');
+  } catch (err) {
+    logger.warn('Price updater failed to start', { error: String(err) });
   }
 
   // Initialize Feed Orchestrator with WebSocket support

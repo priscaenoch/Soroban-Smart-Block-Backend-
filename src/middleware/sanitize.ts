@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { StrKey } from '@stellar/stellar-sdk';
 import { translateAddress, isValidAnyAddress } from '../indexer/strkey-translator';
 
 // ── Stellar address validation ───────────────────────────────────────────────
